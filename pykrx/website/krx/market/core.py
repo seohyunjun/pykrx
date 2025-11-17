@@ -1373,6 +1373,52 @@ class 기업주요변동사항(KrxWebIo):
         return DataFrame(result['block1'])
 
 
+class 금시세검색(KrxWebIo):
+    @property
+    def bld(self):
+        return "dbms/MDC/STAT/standard/MDCSTAT15001"
+
+    def fetch(self, strtDd: str = "20251107", endDd: str = "20251117") -> DataFrame:
+        """[16201] 전종목 시세
+         - http://data.krx.co.kr/contents/MDC/MDI/mdiLoader/index.cmd?menuId=
+           MDC02021301
+
+        Args:
+            local   (str, optional): 지역 선택 (default: "ko_KR")
+            isuCd   (str, optional): 종목 코드 (default: "KRD040200002")
+            strtDd  (str, optional): 조회 시작 일자 (default: "20251107")
+            endDd   (str, optional): 조회 종료 일자 (default: "20251117")
+            share   (str, optional): (default: "1")
+            money   (str, optional): (default: "1")
+            csvxls_isNo (str, optional): CSV/XLS 구분 (default: "false")
+
+        Returns:
+            DataFrame: 일별 금(99.99_1Kg) 시세를 반환합니다.
+
+            TRD_DD TDD_CLSPRC FLUC_TP_CD CMPPREVDD_PRC FLUC_RT TDD_OPNPRC  \
+        0  2025/11/17    193,470          2        -6,510   -3.26    195,700   
+        1  2025/11/14    199,980          2        -4,850   -2.37    203,000   
+        2  2025/11/13    204,830          1         4,460    2.23    206,290   
+        3  2025/11/12    200,370          1         1,140    0.57    200,000   
+
+        TDD_HGPRC TDD_LWPRC ACC_TRDVOL       ACC_TRDVAL  
+        0   195,800   192,540  1,123,533  218,978,678,800  
+        1   203,770   199,240  1,072,925  217,020,603,320  
+        2   206,300   203,350    884,953  180,140,812,950  
+        3   202,220   199,450    913,622  183,275,103,110 
+        """
+        result = self.read(
+            local="ko_KR",
+            isuCd="KRD040200002",
+            strtDd=strtDd,
+            endDd=endDd,
+            share="1",
+            money="1",
+            csvxls_isNo=False,
+        )
+        return DataFrame(result["output"])
+
+
 if __name__ == "__main__":
     pd.set_option('display.width', None)
     # print(개별종목_공매도_잔고().fetch("20200106", "20200110", "KR7005930003"))
