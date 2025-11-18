@@ -13,7 +13,7 @@ from pykrx.website.krx.market.core import (
     개별종목_공매도_거래_개별추이, 투자자별_공매도_거래, 전종목_공매도_잔고,
     개별종목_공매도_잔고, 공매도_거래상위_50종목, 공매도_잔고상위_50종목,
     전체지수기본정보, 개별지수시세, 전체지수등락률, 전체지수시세, 지수구성종목,
-    PER_PBR_배당수익률_전지수, PER_PBR_배당수익률_개별지수, 기업주요변동사항
+    PER_PBR_배당수익률_전지수, PER_PBR_배당수익률_개별지수, 기업주요변동사항, 금시세검색
 )
 
 import numpy as np
@@ -1513,6 +1513,49 @@ def get_stock_major_changes(ticker: str) -> DataFrame:
     df = df.astype({"액면변경전": np.int16})
     return df.sort_index()
 
+def get_gold_price_history(fromdate: str, todate: str) -> DataFrame:
+    """금 시세 이력
+        Args:
+            strtDd  (str, optional): 조회 시작 일자 (default: "20251107")
+            endDd   (str, optional): 조회 종료 일자 (default: "20251117")
+
+        Returns:
+            DataFrame: 일별 금(99.99_1Kg) 시세를 반환합니다.
+
+            TRD_DD TDD_CLSPRC FLUC_TP_CD CMPPREVDD_PRC FLUC_RT TDD_OPNPRC  \
+        0  2025/11/17    193,470          2        -6,510   -3.26    195,700   
+        1  2025/11/14    199,980          2        -4,850   -2.37    203,000   
+        2  2025/11/13    204,830          1         4,460    2.23    206,290   
+        3  2025/11/12    200,370          1         1,140    0.57    200,000   
+
+        TDD_HGPRC TDD_LWPRC ACC_TRDVOL       ACC_TRDVAL  
+        0   195,800   192,540  1,123,533  218,978,678,800  
+        1   203,770   199,240  1,072,925  217,020,603,320  
+        2   206,300   203,350    884,953  180,140,812,950  
+        3   202,220   199,450    913,622  183,275,103,110 
+    """
+    df = 금시세검색().fetch(fromdate, todate)
+    df = df[['TRD_DD', 'TDD_CLSPRC', 'FLUC_TP_CD', 'CMPPREVDD_PRC',
+             'FLUC_RT', 'TDD_OPNPRC', 'TDD_HGPRC', 'TDD_LWPRC',
+             'ACC_TRDVOL', 'ACC_TRDVAL']]
+    df.columns = ['날짜', '종가', '등락구분', '전일대비', '등락률', '시가',
+                  '고가', '저가', '누적거래량', '누적거래대금']
+    df = df.set_index('날짜')
+    df.index = pd.to_datetime(df.index, format='%Y/%m/%d')
+    df = df.replace(r'[^\w\.-]', '', regex=True)
+    df = df.replace('', 0)
+    df = df.astype({
+        "종가": np.int32,
+        "등락구분": np.int8,
+        "전일대비": np.int32,
+        "등락률": np.float16,
+        "시가": np.int32,
+        "고가": np.int32,
+        "저가": np.int32,
+        "누적거래량": np.int64,
+        "누적거래대금": np.int64
+    })
+    return df.sort_index()
 
 if __name__ == "__main__":
     pd.set_option('display.expand_frame_repr', False)
@@ -1525,5 +1568,57 @@ if __name__ == "__main__":
     # df = get_market_ohlcv_by_date(
     #     "20201226", "20210126", "005930")
     # df = get_index_ohlcv_by_ticker("20220602")
-    df = get_market_sector_classifications("20220902", "KOSPI")
+    df = get_gold_price_history("20240101", "20251117")
+    # df = get_market_sector_classifications("20220902", "KOSPI")
     print(df)
+    # import plotly.graph_objects as go
+    # # Index(['종가', '등락구분', '전일대비', '등락률', '시가', '고가', '저가', '누적거래량', '누적거래대금'], dtype='object')
+    # fig = go.Figure()
+    # fig.add_trace(go.Candlestick(
+    #     x=df.index,
+    #     open=df['시가'],
+    #     high=df['고가'],
+    #     low=df['저가'],
+    #     close=df['종가'],
+    #     name="금 시세"
+    # ))
+    # fig.update_layout(
+    #     title="금 시세 (99.99_1Kg)",
+    #     yaxis_title="가격 (원)",
+    #     xaxis_title="날짜",
+    # )
+    
+    # # Moving Average 1month
+    # fig.add_trace(go.Scatter(
+    #     x=df.index,
+    #     y=df['종가'].rolling(window=30).mean(),
+    #     mode='lines',
+    #     name='30일 이동평균',
+    #     line=dict(color='blue', width=1)
+    # ))
+    # # Bollinger Bands
+    # rolling_mean = df['종가'].rolling(window=20).mean()
+    # rolling_std = df['종가'].rolling(window=20).std()
+    # upper_band = rolling_mean + (rolling_std * 2)
+    # lower_band = rolling_mean - (rolling_std * 2)
+    
+    # fig.add_trace(go.Scatter(
+    #     x=df.index,
+    #     y=upper_band,
+    #     mode='lines',
+    #     name='상단 밴드',
+    #     line=dict(color='red', width=1, dash='dash')
+    # ))
+
+    # fig.add_trace(go.Scatter(
+    #     x=df.index,
+    #     y=lower_band,
+    #     mode='lines',
+    #     name='하단 밴드',
+    #     line=dict(color='red', width=1, dash='dash')
+    # ))
+    # # yaxis number format
+    # fig.update_yaxes(tickformat=",")
+    # # yaxis start 0
+    # fig.update_yaxes(rangemode="tozero")
+    # fig.show()
