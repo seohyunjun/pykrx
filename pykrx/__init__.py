@@ -8,22 +8,16 @@ from . import stock
 os = platform.system()
 
 if os == "Darwin":
-    plt.rc('font', family="AppleGothic")
+    plt.rc("font", family="AppleGothic")
 
 else:
-    with resources.path('pykrx', 'NanumBarunGothic.ttf') as font_path:
-        fe = fm.FontEntry(
-            fname=str(font_path),
-            name='NanumBarunGothic'
-        )
+    with resources.path("pykrx", "NanumBarunGothic.ttf") as font_path:
+        fe = fm.FontEntry(fname=str(font_path), name="NanumBarunGothic")
         fm.fontManager.ttflist.insert(0, fe)
-        plt.rc('font', family=fe.name)
+        plt.rc("font", family=fe.name)
 
-plt.rcParams['axes.unicode_minus'] = False
+plt.rcParams["axes.unicode_minus"] = False
 
-__all__ = [
-    'bond',
-    'stock'
-]
+__all__ = ["bond", "stock"]
 
-__version__ = '1.0.51'
+__version__ = "1.0.51"

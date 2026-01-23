@@ -50,7 +50,6 @@ def get_item_gold_ticker(date: str) -> str:
 
 
 if __name__ == "__main__":
-
     # 종목 코드 확인 (ISU_CD)
     item_gold_ticker = get_item_gold_ticker("20251125")
     # ISU_CD 금 99.99_1Kg(KRD040200002), 미니금 99.99_100g(KRD040201000)

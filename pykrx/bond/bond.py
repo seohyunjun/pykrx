@@ -63,7 +63,8 @@ def get_otc_treasury_yields(*args) -> DataFrame:
         df = krx.bond.get_otc_treasury_yields_by_ticker(args[0])
         if df.empty:
             target_date = krx.get_nearest_business_day_in_a_week(
-                date=args[0], prev=True)
+                date=args[0], prev=True
+            )
             df = krx.get_otc_treasury_yields_by_ticker(target_date)
     elif len(args) == 3:
         df = krx.bond.get_otc_treasury_yields_by_date(*args)
