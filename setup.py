@@ -1,13 +1,22 @@
+import re
+
 from setuptools import find_packages, setup
 
-from pykrx import __version__
+
+def get_version():
+    with open("pykrx/__init__.py", encoding="UTF-8") as f:
+        match = re.search(r'__version__\s*=\s*["\']([^"\']+)["\']', f.read())
+        if match:
+            return match.group(1)
+    raise RuntimeError("Unable to find version string.")
+
 
 with open("README.md", encoding="UTF-8") as fh:
     long_description = fh.read()
 
 setup(
     name="pykrx",
-    version=__version__,
+    version=get_version(),
     description="KRX data scraping",
     url="https://github.com/sharebook-kr/pykrx/",
     author="Brayden Jo, Jonghun Yoo",
