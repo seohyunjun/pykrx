@@ -1,7 +1,7 @@
 import pandas as pd
-from pykrx.website.krx.krxio import KrxWebIo
-import datetime
 from pandas import DataFrame
+
+from pykrx.website.krx.krxio import KrxWebIo
 
 
 class 전종목_시세_검색(KrxWebIo):
