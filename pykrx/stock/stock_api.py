@@ -6,7 +6,6 @@ from typing import overload
 
 import pandas as pd
 from deprecated import deprecated
-from multipledispatch import dispatch
 from pandas import DataFrame
 
 from pykrx.website import krx, naver
@@ -1280,13 +1279,13 @@ def get_index_ticker_name(ticker: str) -> str:
 
 
 def get_index_portfolio_deposit_file(
-    ticker: str, date: str = None, alternative: bool = False
+    ticker: str, date: str | datetime.date | None = None, alternative: bool = False
 ) -> list:
     """지수 구성 종목 조회
 
     Args:
         ticker      (str          ): 조회 인덱스
-        date        (str, optional): 조회 일자 (YYMMDD)
+        date        (str | datetime.date, optional): 조회 일자 (YYYYMMDD 또는 date/datetime)
         alternative (bool, optional): 휴일일 경우 이전 영업일 선택 여부
 
     NOTE: 2014년 5월 2일 까지만 조회 가능
@@ -1300,14 +1299,14 @@ def get_index_portfolio_deposit_file(
     else:
         target_date = date
 
-    if target_date <= "20140501":
-        print("KRX web server does NOT provide data prior to 2014/05/01.")
-        return []
-
     if isinstance(target_date, datetime.date):
         target_date = krx.datetime2string(target_date)
 
     target_date = target_date.replace("-", "")
+
+    if target_date <= "20140501":
+        print("KRX web server does NOT provide data prior to 2014/05/01.")
+        return []
 
     pdf = krx.get_index_portfolio_deposit_file(target_date, ticker)
     # 주말 or 비영업일 여부를 확인하는 것 자체가 상대적으로 오랜 시간 걸려 lazy 판단
@@ -1572,15 +1571,18 @@ def get_index_fundamental_by_ticker(
 
 
 def get_index_fundamental_by_date(
-    fromdate: str, todate: str, ticker: str, prev: bool = True
+    fromdate: str | datetime.date,
+    todate: str | datetime.date,
+    ticker: str,
+    prev: bool = True,
 ) -> DataFrame:
     """특정 종목의 지정된 기간 PER/PBR/배당수익률 조회
 
     Args:
-        fromdate     (str           ): 조회 시작 일자 (YYMMDD)
-        todate       (str           ): 조회 종료 일자 (YYMMDD)
+        fromdate     (str | datetime.date): 조회 시작 일자 (YYYYMMDD 또는 date/datetime)
+        todate       (str | datetime.date): 조회 종료 일자 (YYYYMMDD 또는 date/datetime)
         ticker       (str           ): 조회 인덱스 티커
-        prev         (bool, optional): 휴일일 경우 이전/이후 영업일 선택
+        prev         (bool, optional): 호환성을 위한 인자. 기간 조회에는 적용하지 않음
 
     Returns:
         DataFrame:
@@ -1597,7 +1599,7 @@ def get_index_fundamental_by_date(
     """
 
     if isinstance(fromdate, datetime.date):
-        fromdate = krx.datetime2string(fromdate, prev)
+        fromdate = krx.datetime2string(fromdate)
 
     if isinstance(todate, datetime.date):
         todate = krx.datetime2string(todate)
@@ -2626,21 +2628,23 @@ def get_etf_tracking_error(fromdate, todate, ticker) -> DataFrame:
 
 
 @overload
-def get_etf_trading_volume_and_value(fromdate: str, todate: str) -> DataFrame: ...
+def get_etf_trading_volume_and_value(
+    fromdate: str | datetime.date, todate: str | datetime.date
+) -> DataFrame: ...
 
 
 @overload
 def get_etf_trading_volume_and_value(
-    fromdate: str,
-    todate: str,  # pylint: disable=function-redefined  # noqa
+    fromdate: str | datetime.date,
+    todate: str | datetime.date,  # pylint: disable=function-redefined  # noqa
     ticker: str,
 ) -> DataFrame: ...
 
 
 @overload
 def get_etf_trading_volume_and_value(
-    fromdate: str,
-    todate: str,  # pylint: disable=function-redefined  # noqa
+    fromdate: str | datetime.date,
+    todate: str | datetime.date,  # pylint: disable=function-redefined  # noqa
     query_type1: str,
     query_type2: str,
 ) -> DataFrame: ...
@@ -2648,23 +2652,53 @@ def get_etf_trading_volume_and_value(
 
 @overload
 def get_etf_trading_volume_and_value(
-    fromdate: str,
-    todate: str,
+    fromdate: str | datetime.date,
+    todate: str | datetime.date,
     ticker: str,  # pylint: disable=function-redefined  # noqa
     query_type1: str,
     query_type2: str,
 ) -> DataFrame: ...
 
 
-@dispatch(str, str)
-def get_etf_trading_volume_and_value(fromdate: str, todate: str) -> DataFrame:  # pylint: disable=function-redefined  # noqa
+def get_etf_trading_volume_and_value(*args, **kwargs) -> DataFrame:
+    """ETF 거래실적을 조회한다.
+
+    fromdate와 todate는 YYYYMMDD 문자열 또는 datetime.date/datetime을 받는다.
+    날짜만 지정하면 투자자별 합계, ticker를 추가하면 개별 종목 합계를 조회한다.
+    query_type1과 query_type2를 함께 지정하면 일자별 실적을 조회한다.
+    모든 인자는 위치 인자와 키워드 인자를 혼합하여 전달할 수 있다.
+
+    Example:
+        get_etf_trading_volume_and_value(
+            datetime.date(2021, 1, 18), todate="20210126", ticker="069500"
+        )
+    """
+    variants = {
+        2: _get_etf_trading_by_investor,
+        3: _get_etf_trading_by_investor_for_ticker,
+        4: _get_etf_trading_by_date,
+        5: _get_etf_trading_by_date_for_ticker,
+    }
+    func = variants.get(len(args) + len(kwargs))
+    if func is None:
+        raise TypeError(
+            "Expected dates with optional ticker and/or query_type1/query_type2"
+        )
+    # Bind before calling so missing, duplicate and unknown keywords fail locally.
+    bound = inspect.signature(func).bind(*args, **kwargs)
+    return func(*bound.args, **bound.kwargs)
+
+
+def _get_etf_trading_by_investor(
+    fromdate: str | datetime.date, todate: str | datetime.date
+) -> DataFrame:  # pylint: disable=function-redefined  # noqa
     """주어진 기간의 투자자별 거래실적 합계
 
 
 
     Args:
-        fromdate    (str): 조회 시작 일자 (YYMMDD)
-        todate      (str): 조회 종료 일자 (YYMMDD)
+        fromdate    (str | datetime.date): 조회 시작 일자 (YYYYMMDD 또는 date/datetime)
+        todate      (str | datetime.date): 조회 종료 일자 (YYYYMMDD 또는 date/datetime)
 
     Returns:
         DataFrame:
@@ -2695,16 +2729,15 @@ def get_etf_trading_volume_and_value(fromdate: str, todate: str) -> DataFrame:  
     return krx.get_trading_volume_and_value_by_investor(fromdate, todate)
 
 
-@dispatch(str, str, str)
-def get_etf_trading_volume_and_value(
-    fromdate: str,
-    todate: str,  # pylint: disable=function-redefined  # noqa
+def _get_etf_trading_by_investor_for_ticker(
+    fromdate: str | datetime.date,
+    todate: str | datetime.date,  # pylint: disable=function-redefined  # noqa
     ticker: str,
 ) -> DataFrame:
     """주어진 기간의 투자자별(개별종목) 거래실적 합계
     Args:
-        fromdate    (str): 조회 시작 일자 (YYMMDD)
-        todate      (str): 조회 종료 일자 (YYMMDD)
+        fromdate    (str | datetime.date): 조회 시작 일자 (YYYYMMDD 또는 date/datetime)
+        todate      (str | datetime.date): 조회 종료 일자 (YYYYMMDD 또는 date/datetime)
         ticker      (str): 조회할 종목의 티커
 
     Returns:
@@ -2739,18 +2772,17 @@ def get_etf_trading_volume_and_value(
     )
 
 
-@dispatch(str, str, str, str)
-def get_etf_trading_volume_and_value(
-    fromdate: str,
-    todate: str,  # pylint: disable=function-redefined  # noqa
+def _get_etf_trading_by_date(
+    fromdate: str | datetime.date,
+    todate: str | datetime.date,  # pylint: disable=function-redefined  # noqa
     query_type1: str,
     query_type2: str,
 ) -> DataFrame:
     """주어진 기간의 일자별 거래 실적 조회
 
     Args:
-        fromdate        (str): 조회 시작 일자 (YYMMDD)
-        todate          (str): 조회 종료 일자 (YYMMDD)
+        fromdate        (str | datetime.date): 조회 시작 일자 (YYYYMMDD 또는 date/datetime)
+        todate          (str | datetime.date): 조회 종료 일자 (YYYYMMDD 또는 date/datetime)
         query_type1     (str): 거래대금 / 거래량
         query_type2     (str): 순매수 / 매수 / 매도
 
@@ -2779,10 +2811,9 @@ def get_etf_trading_volume_and_value(
     )
 
 
-@dispatch(str, str, str, str, str)
-def get_etf_trading_volume_and_value(
-    fromdate: str,
-    todate: str,
+def _get_etf_trading_by_date_for_ticker(
+    fromdate: str | datetime.date,
+    todate: str | datetime.date,
     ticker: str,  # pylint: disable=function-redefined  # noqa
     query_type1: str,
     query_type2: str,
@@ -2790,8 +2821,8 @@ def get_etf_trading_volume_and_value(
     """주어진 기간 동안 개별 종목의 일자별 거래 실적 조회
 
     Args:
-        fromdate        (str): 조회 시작 일자 (YYMMDD)
-        todate          (str): 조회 종료 일자 (YYMMDD)
+        fromdate        (str | datetime.date): 조회 시작 일자 (YYYYMMDD 또는 date/datetime)
+        todate          (str | datetime.date): 조회 종료 일자 (YYYYMMDD 또는 date/datetime)
         query_type1     (str): 거래대금 / 거래량
         query_type2     (str): 순매수 / 매수 / 매도
         ticker          (str): 조회 종목의 티커
